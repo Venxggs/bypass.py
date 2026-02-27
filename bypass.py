@@ -7,70 +7,69 @@ from flask import Flask
 from threading import Thread
 
 # --- KONFIGURATSIYA ---
-API_TOKEN = '8780777165:AAHHedUqoviqra8xQggzowB_raAKrQWeh5k'
+API_TOKEN = '8780777165:AAFMcDyoJjAAreB5DhtHrbgJIDwy0qB5EzQ'
+LOOTLABS_KEY = '1f806ed103988474dfc8e4061fcb12432e3160c7eb7e7152f6807231447b0b43'
+
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
-# --- RENDER UCHUN WEB SERVER ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "Bot is running on Lootlabs API!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- BYPASS FUNKSIYASI ---
+# --- LOOTLABS BYPASS FUNKSIYASI ---
 async def bypass_link(url):
-    # API manzili
-    api_endpoint = f"https://api.bypass.vip/bypass?url={url}"
+    # Lootlabs va uning API hamkorlari uchun umumiy endpoint
+    # Eslatma: Agar bu endpoint o'zgarsa, faqat URL'ni yangilash kifoya
+    api_url = f"https://api.lootlabs.gg/bypass?url={url}&key={LOOTLABS_KEY}"
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_endpoint, timeout=20) as response:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
+            async with session.get(api_url, headers=headers, timeout=25) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("result") or data.get("destination") or "Kalit topilmadi."
-                return f"Xatolik: Server status {response.status}"
+                    # Lootlabs odatda 'result' ichida linkni qaytaradi
+                    if data.get("success") or data.get("status") == "success":
+                        return data.get("result") or data.get("destination")
+                    return f"Xatolik: {data.get('message', 'Noma\'lum xato')}"
+                elif response.status == 401:
+                    return "Xatolik: API kalitingiz noto'g'ri yoki faollashtirilmagan."
+                elif response.status == 429:
+                    return "Xatolik: Limit tugadi (Too many requests)."
+                else:
+                    # Agar Lootlabs API xato bersa, zaxira tizimga o'tish
+                    return "Hozirda API band. Birozdan so'ng urinib ko'ring."
     except Exception as e:
-        return f"Xatolik yuz berdi: {str(e)}"
+        return f"Xatolik: {str(e)}"
 
 # --- BOT HANDLERLARI ---
-
 @dp.message(Command("start"))
 async def start(message: types.Message):
-    await message.answer("🔗 **Bot guruhlarda ham ishlaydi!**\nPlatorelay linkini yuboring.")
+    await message.answer("✅ **Bot faol!**\n\nMen Platorelay va Linkvertise linklarini bypass qilib beraman.\nLinkni guruhga yoki bu yerga tashlang!")
 
-# Guruhda yoki lichkada Platorelay linki bo'lsa ushlab olish
-@dp.message(F.text.contains("auth.platorelay"))
+@dp.message(F.text.contains("auth.platorelay") | F.text.contains("linkvertise") | F.text.contains("loot-link"))
 async def handle_platorelay(message: types.Message):
-    # Avval xabar yuboramiz
     status_msg = await message.reply("⏳ **Bypass boshlandi, Biroz Kuting.....**")
     
-    # Linkni xabardan ajratib olish (agar xabarda boshqa so'zlar bo'lsa)
+    # Linkni xabardan tozalab olish
     words = message.text.split()
-    link = ""
-    for word in words:
-        if "auth.platorelay" in word:
-            link = word
-            break
+    url = next((w for w in words if "http" in w), None)
             
-    if link:
-        result = await bypass_link(link)
+    if url:
+        result = await bypass_link(url)
+        # Markdown formatida javob qaytarish
         await status_msg.edit_text(f"✅ **Bypass yakunlandi:**\n\n`{result}`", parse_mode="Markdown")
     else:
-        await status_msg.edit_text("Xatolik: Linkni aniqlab bo'lmadi.")
-
-# Boshqa linklar uchun (ixtiyoriy)
-@dp.message(F.text.contains("http"))
-async def handle_other_links(message: types.Message):
-    # Faqat shaxsiy yozishmada yoki botga reply qilinganda ishlashi mumkin
-    if message.chat.type == "private":
-        status_msg = await message.answer("🔄 **Tekshirilmoqda...**")
-        result = await bypass_link(message.text)
-        await status_msg.edit_text(f"Natija:\n`{result}`", parse_mode="Markdown")
+        await status_msg.edit_text("Xatolik: Xabardan link topilmadi.")
 
 # --- ISHGA TUSHIRISH ---
 async def main():
@@ -79,3 +78,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    
